@@ -1,341 +1,198 @@
-import sys, random, time, json
-import pygame
-
-# Multi-window (Pygame 2)
-from pygame._sdl2 import Window, Renderer
+import pygame, sys, random, time
 
 pygame.init()
-pygame.font.init()
 
 # =========================
-# WINDOWS
+# SCREEN
 # =========================
-DISPLAY_SIZE = (1100, 650)
-HOST_SIZE = (420, 650)
+W, H = 1100, 650
+screen = pygame.display.set_mode((W, H))
+pygame.display.set_caption("Family Feud Final")
 
-display_win = Window("DISPLAY (Audience)", size=DISPLAY_SIZE)
-display_ren = Renderer(display_win)
-
-host_win = Window("HOST PANEL", size=HOST_SIZE, position=(DISPLAY_SIZE[0]+20, 60))
-host_ren = Renderer(host_win)
-
-display_surf = pygame.Surface(DISPLAY_SIZE)
-host_surf = pygame.Surface(HOST_SIZE)
+clock = pygame.time.Clock()
 
 # =========================
 # FONT
 # =========================
-font = pygame.font.SysFont("consolas", 22)
-big = pygame.font.SysFont("consolas", 52, bold=True)
+font = pygame.font.SysFont("arial", 24, bold=True)
+big = pygame.font.SysFont("consolas", 60, bold=True)
 
 # =========================
-# AUDIO (optional)
+# MAIN GAME DATA
 # =========================
-def load_sfx(path):
-    try: return pygame.mixer.Sound(path)
-    except: return None
+question = "Benda di rumah"
+answers = [
+    {"text":"TV","points":18},
+    {"text":"KURSI","points":15},
+    {"text":"MEJA","points":14},
+    {"text":"LEMARI","points":12},
+    {"text":"SOFA","points":10},
+    {"text":"KARPET","points":8},
+    {"text":"LAMPU","points":7},
+    {"text":"AC","points":6},
+]
 
-try:
-    pygame.mixer.init()
-    try:
-        pygame.mixer.music.load("crowd_loop.wav")
-        pygame.mixer.music.set_volume(0.25)
-        pygame.mixer.music.play(-1)
-    except: pass
-except: pass
+state = [{"revealed":False,"scale":1,"anim":False,"phase":0} for _ in answers]
 
-SFX = {
-    "ding": load_sfx("ding.wav"),
-    "strike": load_sfx("strike.wav"),
-    "buzzer": load_sfx("buzzer.wav"),
-    "tick": load_sfx("tick.wav"),
-    "win": load_sfx("win.wav")
-}
-def sfx(name):
-    if SFX.get(name): SFX[name].play()
+score_main = 0
+target_score = 100
 
 # =========================
-# LOAD DATABASE (fallback kalau tidak ada file)
+# FAST MONEY DATA
 # =========================
-try:
-    with open("soal.json") as f:
-        QUESTIONS = json.load(f)
-except:
-    QUESTIONS = [
-        {"question":"Benda di rumah",
-         "answers":[{"text":"TV","points":18},{"text":"KURSI","points":12},{"text":"MEJA","points":10}]},
-        {"question":"Alat komunikasi",
-         "answers":[{"text":"HP","points":30},{"text":"EMAIL","points":15},{"text":"TELEPON","points":20}]}
-    ]
-
-def pick_question():
-    q = random.choice(QUESTIONS)
-    return q["question"], [(a["text"], a["points"]) for a in q["answers"]]
-
-# =========================
-# GAME STATE
-# =========================
-phase = "INTRO"
-substate = "BUZZER"
-
-question, answers = pick_question()
-
-def make_state(ans):
-    return [{
-        "text": t, "points": p,
-        "revealed": False,
-        "anim": False,
-        "scale": 1.0,
-        "phase": 0
-    } for (t,p) in ans]
-
-ans_state = make_state(answers)
-
-scoreA = scoreB = 0
-dispA = dispB = 0
-current = None
-strikes = 0
-round_num = 1
-target_score = 300
-
-def mult(r):
-    if r<=2: return 1
-    if r==3: return 2
-    if r<=5: return 3
-    return random.choice([1,2,3])
-
-multiplier = mult(round_num)
-
-# =========================
-# FAST MONEY
-# =========================
-FM_Q = [
- ("Benda kantor",{"KOMPUTER":30,"MEJA":25}),
+fm_questions = [
+ ("Benda liburan",{"BAJU":30,"HP":25}),
  ("Transportasi",{"MOBIL":30,"MOTOR":25}),
+ ("Makanan",{"NASI":30,"ROTI":25}),
  ("Elektronik",{"TV":30,"HP":25}),
- ("Bisa dibuka",{"PINTU":30,"BUKU":25}),
- ("Benda dapur",{"PIRING":30,"SENDOK":25})
+ ("Dapur",{"SENDOK":30,"PIRING":25}),
 ]
 
 fm_player = 1
 fm_q = 0
 fm_input = ""
-fm_a1=[]; fm_a2=[]
-fm_s1=[]; fm_s2=[]
+fm_ans1=[]; fm_ans2=[]
+fm_score1=[]; fm_score2=[]
 fm_timer = 20
 fm_start = time.time()
 
-winner = None
+# =========================
+# STATE
+# =========================
+phase = "MAIN"
 
 # =========================
 # LED TEXT
 # =========================
-def led_text(surf, txt, x,y, col=(255,220,0), scale=3):
-    f = pygame.font.SysFont("consolas", 16, bold=True)
-    t = f.render(txt, True, (255,255,255))
-    t = pygame.transform.scale(t, (t.get_width()*scale, t.get_height()*scale))
-    for iy in range(0,t.get_height(),scale):
-        for ix in range(0,t.get_width(),scale):
+def led(text,x,y):
+    f = pygame.font.SysFont("consolas",18,bold=True)
+    t = f.render(text,True,(255,255,255))
+    t = pygame.transform.scale(t,(t.get_width()*3,t.get_height()*3))
+    for iy in range(0,t.get_height(),3):
+        for ix in range(0,t.get_width(),3):
             if t.get_at((ix,iy))[0]>0:
-                pygame.draw.circle(surf,col,(x+ix,y+iy),2)
+                pygame.draw.circle(screen,(255,220,0),(x+ix,y+iy),2)
 
 # =========================
-# ANIMATION
+# DRAW ARC
 # =========================
-def flip(i):
-    if not ans_state[i]["revealed"]:
-        ans_state[i]["anim"]=True
-        ans_state[i]["phase"]=0
-
-def update_anim():
-    for a in ans_state:
-        if a["anim"]:
-            if a["phase"]==0:
-                a["scale"]-=0.08
-                if a["scale"]<=0:
-                    a["scale"]=0
-                    a["phase"]=1
-                    a["revealed"]=True
-                    sfx("ding")
-            else:
-                a["scale"]+=0.08
-                if a["scale"]>=1:
-                    a["scale"]=1
-                    a["anim"]=False
-
-def update_score():
-    global dispA, dispB
-    if dispA<scoreA: dispA+=2; sfx("tick")
-    if dispB<scoreB: dispB+=2; sfx("tick")
+def draw_arc(color):
+    pygame.draw.circle(screen,(255,200,0),(550,320),320,30)
+    pygame.draw.circle(screen,color,(550,320),300)
 
 # =========================
-# MAIN LOGIC
-# =========================
-def reveal(i):
-    global scoreA, scoreB, phase, winner
-    if i<len(ans_state) and not ans_state[i]["revealed"]:
-        flip(i)
-        pts = ans_state[i]["points"]*multiplier
-        if current=="A": scoreA+=pts
-        elif current=="B": scoreB+=pts
-
-        if scoreA>=target_score:
-            phase="FAST"; winner="A"
-        if scoreB>=target_score:
-            phase="FAST"; winner="B"
-
-def next_round():
-    global question,answers,ans_state,strikes,current,round_num,multiplier
-    round_num+=1
-    multiplier=mult(round_num)
-    question,answers=pick_question()
-    ans_state=make_state(answers)
-    strikes=0
-    current=None
-
-def buzzer(t):
-    global current
-    if current is None:
-        current=t
-        sfx("buzzer")
-
-def strike():
-    global strikes
-    strikes+=1
-    sfx("strike")
-
-# =========================
-# DRAW DISPLAY
+# MAIN GAME DRAW
 # =========================
 def draw_main():
-    display_surf.fill((10,30,120))
-    led_text(display_surf,f"ROUND {round_num} x{multiplier}",420,20)
-    led_text(display_surf,question.upper(),200,80)
+    screen.fill((10,30,120))
+    draw_arc((10,30,120))
 
-    for i,a in enumerate(ans_state):
-        x=120 if i<4 else 560
-        y=150+(i%4)*90
-        w=int(360*a["scale"])
-        r=pygame.Rect(x+180-w//2,y,w,70)
-        pygame.draw.rect(display_surf,(10,10,10),r)
+    led(str(score_main),500,60)
 
-        if a["revealed"] and a["scale"]>0.2:
-            led_text(display_surf,a["text"],r.x+10,y+10)
-            led_text(display_surf,str(a["points"]*multiplier),r.x+r.width-60,y+10)
+    qtxt = font.render(question,True,(255,255,255))
+    screen.blit(qtxt,(400,130))
+
+    for i in range(8):
+        x = 150 if i<4 else 600
+        y = 200+(i%4)*80
+        a = answers[i]
+        s = state[i]
+
+        rect = pygame.Rect(x,y,360,60)
+        pygame.draw.rect(screen,(255,200,0),rect)
+        pygame.draw.rect(screen,(0,0,0),rect,3)
+
+        if s["revealed"]:
+            inner = pygame.Rect(x+5,y+5,350,50)
+            pygame.draw.rect(screen,(0,0,0),inner)
+
+            screen.blit(font.render(a["text"],1,(255,255,255)),(x+10,y+15))
+            screen.blit(font.render(str(a["points"]),1,(255,0,0)),(x+300,y+15))
         else:
-            led_text(display_surf,str(i+1),r.centerx-10,y+10)
+            screen.blit(font.render(str(i+1),1,(0,0,0)),(x+170,y+15))
 
-    led_text(display_surf,f"A {dispA}",40,580)
-    led_text(display_surf,f"B {dispB}",900,580)
-
+# =========================
+# FAST MONEY DRAW
+# =========================
 def draw_fast():
-    display_surf.fill((0,0,0))
-    total=sum(fm_s1)+sum(fm_s2)
-    led_text(display_surf,str(total),520,20)
+    screen.fill((150,0,0))
+    draw_arc((150,0,0))
+
+    total = sum(fm_score1)+sum(fm_score2)
+    led(str(total),500,60)
+
+    screen.blit(font.render("PLAYER 1",1,(255,255,255)),(150,120))
+    screen.blit(font.render("PLAYER 2",1,(255,255,255)),(750,120))
 
     for i in range(5):
-        y=120+i*80
-        if i<len(fm_a1):
-            led_text(display_surf,fm_a1[i],60,y)
-            led_text(display_surf,str(fm_s1[i]),320,y)
-        if i<len(fm_a2):
-            led_text(display_surf,fm_a2[i],700,y)
-            led_text(display_surf,str(fm_s2[i]),960,y)
+        y = 180+i*70
 
-    led_text(display_surf,fm_input,420,560,(255,255,255))
+        # kiri
+        if i<len(fm_ans1):
+            screen.blit(font.render(fm_ans1[i],1,(255,255,255)),(120,y))
+            screen.blit(font.render(str(fm_score1[i]),1,(255,220,0)),(300,y))
 
-    t=max(0,int(fm_timer-(time.time()-fm_start)))
-    led_text(display_surf,f"TIME {t}",520,520,(255,80,80))
+        # kanan
+        if i<len(fm_ans2):
+            screen.blit(font.render(fm_ans2[i],1,(255,255,255)),(700,y))
+            screen.blit(font.render(str(fm_score2[i]),1,(255,220,0)),(900,y))
 
-def draw_end():
-    display_surf.fill((0,0,0))
-    total=sum(fm_s1)+sum(fm_s2)
-    txt="WIN!" if total>=200 else "LOSE"
-    led_text(display_surf,txt,480,300)
+    # input
+    screen.blit(font.render(fm_input,1,(255,255,0)),(400,550))
 
-# =========================
-# HOST UI
-# =========================
-class Btn:
-    def __init__(self,x,y,w,h,txt,act):
-        self.r=pygame.Rect(x,y,w,h)
-        self.t=txt
-        self.a=act
-    def draw(self):
-        pygame.draw.rect(host_surf,(255,200,0),self.r)
-        host_surf.blit(font.render(self.t,1,(0,0,0)),(self.r.x+10,self.r.y+10))
-    def click(self,pos):
-        if self.r.collidepoint(pos): self.a()
-
-buttons=[
-    Btn(20,20,160,40,"A",lambda:buzzer("A")),
-    Btn(200,20,160,40,"B",lambda:buzzer("B")),
-    Btn(20,80,160,40,"STRIKE",strike),
-    Btn(200,80,160,40,"NEXT",next_round)
-]
-for i in range(8):
-    buttons.append(Btn(20+(i%2)*180,150+(i//2)*50,160,40,f"{i+1}",lambda i=i:reveal(i)))
-
-def draw_host():
-    host_surf.fill((30,30,30))
-    for b in buttons: b.draw()
+    # timer
+    t = int(fm_timer-(time.time()-fm_start))
+    led(str(max(0,t)),540,130)
 
 # =========================
 # LOOP
 # =========================
-clock=pygame.time.Clock()
-start=time.time()
-
 running=True
+
 while running:
-
     for e in pygame.event.get():
-        if e.type==pygame.QUIT: running=False
-
-        if e.type==pygame.MOUSEBUTTONDOWN:
-            for b in buttons:
-                b.click(pygame.mouse.get_pos())
+        if e.type==pygame.QUIT:
+            running=False
 
         if e.type==pygame.KEYDOWN:
-            if e.key==pygame.K_ESCAPE: running=False
 
-            if phase=="FAST":
+            # MAIN GAME
+            if phase=="MAIN":
+                if pygame.K_1<=e.key<=pygame.K_8:
+                    i=e.key-pygame.K_1
+                    if not state[i]["revealed"]:
+                        state[i]["revealed"]=True
+                        score_main+=answers[i]["points"]
+
+                        if score_main>=target_score:
+                            phase="FAST"
+
+            # FAST MONEY
+            elif phase=="FAST":
                 if e.key==pygame.K_RETURN:
                     if fm_q<5:
-                        q,data=FM_Q[fm_q]
-                        ans=fm_input.upper()
-                        pts=data.get(ans,0)
-
-                        if fm_player==2 and ans in fm_a1:
-                            pts=0
+                        q,data=fm_questions[fm_q]
+                        pts=data.get(fm_input.upper(),0)
 
                         if fm_player==1:
-                            fm_a1.append(ans); fm_s1.append(pts)
+                            fm_ans1.append(fm_input.upper())
+                            fm_score1.append(pts)
                         else:
-                            fm_a2.append(ans); fm_s2.append(pts)
+                            fm_ans2.append(fm_input.upper())
+                            fm_score2.append(pts)
 
-                        fm_input=""; fm_q+=1
+                        fm_input=""
+                        fm_q+=1
 
                 elif e.key==pygame.K_BACKSPACE:
                     fm_input=fm_input[:-1]
                 else:
                     fm_input+=e.unicode
 
-    # UPDATE
-    if phase=="INTRO":
-        display_surf.fill((0,0,0))
-        led_text(display_surf,"FAMILY FEUD",350,250)
-        if time.time()-start>3:
-            phase="MAIN"
-
-    elif phase=="MAIN":
-        update_anim()
-        update_score()
-        draw_main()
-
-    elif phase=="FAST":
-        draw_fast()
-        if time.time()-fm_start>fm_timer:
+    # TIMER SWITCH
+    if phase=="FAST":
+        t = fm_timer-(time.time()-fm_start)
+        if t<=0:
             if fm_player==1:
                 fm_player=2
                 fm_q=0
@@ -343,21 +200,19 @@ while running:
                 fm_start=time.time()
             else:
                 phase="END"
-                sfx("win")
 
-    elif phase=="END":
-        draw_end()
+    # DRAW
+    if phase=="MAIN":
+        draw_main()
+    elif phase=="FAST":
+        draw_fast()
+    else:
+        screen.fill((0,0,0))
+        total = sum(fm_score1)+sum(fm_score2)
+        msg = "WIN!" if total>=200 else "LOSE"
+        screen.blit(big.render(msg,1,(255,200,0)),(450,300))
 
-    draw_host()
-
-    display_ren.clear()
-    display_ren.blit(display_surf,(0,0))
-    display_ren.present()
-
-    host_ren.clear()
-    host_ren.blit(host_surf,(0,0))
-    host_ren.present()
-
+    pygame.display.flip()
     clock.tick(60)
 
 pygame.quit()
