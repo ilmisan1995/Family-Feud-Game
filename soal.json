@@ -1,0 +1,71 @@
+[
+  {
+    "question": "Benda yang ada di ruang tamu",
+    "answers": [
+      {"text": "TV", "points": 30},
+      {"text": "SOFA", "points": 25},
+      {"text": "MEJA", "points": 20},
+      {"text": "KARPET", "points": 15},
+      {"text": "LAMPU", "points": 10}
+    ]
+  },
+  {
+    "question": "Alat komunikasi modern",
+    "answers": [
+      {"text": "HP", "points": 35},
+      {"text": "EMAIL", "points": 25},
+      {"text": "WHATSAPP", "points": 20},
+      {"text": "TELEPON", "points": 15}
+    ]
+  },
+  {
+    "question": "Kendaraan yang sering digunakan",
+    "answers": [
+      {"text": "MOTOR", "points": 30},
+      {"text": "MOBIL", "points": 25},
+      {"text": "SEPEDA", "points": 20},
+      {"text": "BUS", "points": 15},
+      {"text": "KERETA", "points": 10}
+    ]
+  },
+  {
+    "question": "Makanan yang digoreng",
+    "answers": [
+      {"text": "AYAM GORENG", "points": 30},
+      {"text": "TEMPE", "points": 25},
+      {"text": "TAHU", "points": 20},
+      {"text": "TELUR", "points": 15},
+      {"text": "IKAN", "points": 10}
+    ]
+  },
+  {
+    "question": "Hal yang dilakukan sebelum tidur",
+    "answers": [
+      {"text": "SIKAT GIGI", "points": 30},
+      {"text": "DOA", "points": 25},
+      {"text": "MAIN HP", "points": 20},
+      {"text": "NONTON", "points": 15},
+      {"text": "MINUM", "points": 10}
+    ]
+  },
+  {
+    "question": "Benda yang ada di dapur",
+    "answers": [
+      {"text": "KOMPOR", "points": 30},
+      {"text": "WAJAN", "points": 25},
+      {"text": "PIRING", "points": 20},
+      {"text": "SENDOK", "points": 15},
+      {"text": "GELAS", "points": 10}
+    ]
+  },
+  {
+    "question": "Profesi yang memakai seragam",
+    "answers": [
+      {"text": "POLISI", "points": 30},
+      {"text": "DOKTER", "points": 25},
+      {"text": "GURU", "points": 20},
+      {"text": "TENTARA", "points": 15},
+      {"text": "SATPAM", "points": 10}
+    ]
+  }
+]
